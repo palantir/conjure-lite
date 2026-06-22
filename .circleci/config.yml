@@ -16,7 +16,12 @@ jobs:
       - checkout
       - run:
           name: Enable corepack (pins pnpm from package.json packageManager)
-          command: sudo corepack enable
+          # Update corepack first: the version bundled in the Node images ships
+          # outdated signing keys and fails pnpm download with "Cannot find
+          # matching keyid". corepack@latest has refreshed keys.
+          command: |
+            sudo npm install -g corepack@latest
+            sudo corepack enable
       - restore_cache:
           keys:
             - pnpm-store-v1-{{ arch }}-<< parameters.node-version >>-{{ checksum "pnpm-lock.yaml" }}
