@@ -43,6 +43,18 @@ jobs:
           name: Verify nothing added
           command: u="$(git ls-files --others --exclude-standard)" && test -z "$u"
 
+  # Fan-in job: succeeds only if every build-and-test matrix job succeeded.
+  # Mark *this* job as the single required status check in branch protection
+  # so the Node version matrix can change without touching repo settings.
+  circle-all:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: All CircleCI checks passed
+          command: echo "All build-and-test matrix jobs succeeded."
+
 workflows:
   ci:
     jobs:
@@ -53,3 +65,6 @@ workflows:
                 - "20.18.0"
                 - "22.11.0"
                 - "24.0.0"
+      - circle-all:
+          requires:
+            - build-and-test
