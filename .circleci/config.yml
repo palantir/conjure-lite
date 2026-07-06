@@ -1,0 +1,70 @@
+version: 2.1
+
+# Mirrors .github/workflows/ci.yml: install deps with pnpm, run the full
+# turbo `check` pipeline (build + lint + test) across a matrix of Node
+# versions, then assert the working tree is unchanged.
+
+jobs:
+  build-and-test:
+    parameters:
+      node-version:
+        type: string
+    docker:
+      - image: cimg/node:<< parameters.node-version >>
+    resource_class: medium
+    steps:
+      - checkout
+      - run:
+          name: Enable corepack (pins pnpm from package.json packageManager)
+          # Update corepack first: the version bundled in the Node images ships
+          # outdated signing keys and fails pnpm download with "Cannot find
+          # matching keyid". corepack@latest has refreshed keys.
+          command: |
+            sudo npm install -g corepack@latest
+            sudo corepack enable
+      - restore_cache:
+          keys:
+            - pnpm-store-v1-{{ arch }}-<< parameters.node-version >>-{{ checksum "pnpm-lock.yaml" }}
+            - pnpm-store-v1-{{ arch }}-<< parameters.node-version >>-
+      - run:
+          name: Install dependencies
+          command: pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-store-v1-{{ arch }}-<< parameters.node-version >>-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.local/share/pnpm/store
+      - run:
+          name: Build, lint, and test
+          command: pnpm exec turbo check
+      - run:
+          name: Verify nothing changed
+          command: git diff --exit-code
+      - run:
+          name: Verify nothing added
+          command: u="$(git ls-files --others --exclude-standard)" && test -z "$u"
+
+  # Fan-in job: succeeds only if every build-and-test matrix job succeeded.
+  # Mark *this* job as the single required status check in branch protection
+  # so the Node version matrix can change without touching repo settings.
+  circle-all:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: All CircleCI checks passed
+          command: echo "All build-and-test matrix jobs succeeded."
+
+workflows:
+  ci:
+    jobs:
+      - build-and-test:
+          matrix:
+            parameters:
+              node-version:
+                - "20.18.0"
+                - "22.11.0"
+                - "24.0.0"
+      - circle-all:
+          requires:
+            - build-and-test
