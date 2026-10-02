@@ -1,0 +1,7 @@
+repo-type:
+  type: lernaMonoRepo
+  lernaMonoRepo:
+    changelogDirectories:
+      - packages/cli
+      - packages/conjure-lite
+      - packages/tsconfig
